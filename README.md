@@ -208,5 +208,5 @@ MIT License - see LICENSE file for details.
 
 ## Support
 
-- GitHub Issues: [Report bugs or request features](https://github.com/ACTIG/actig-lambda-deployer/issues)
-- Documentation: [Full documentation](https://github.com/ACTIG/actig-lambda-deployer)
+- GitHub Issues: [Report bugs or request features](https://github.com/gao-dennis/actig-lambda-deployer/issues)
+- Documentation: [Full documentation](https://github.com/gao-dennis/actig-lambda-deployer)
