@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "actig-lambda-deployer"
-version = "0.1.0"
+version = "0.1.1"
 description = "AWS Lambda Container Deployment CLI with AI-powered code analysis"
 readme = "README.md"
 license = {text = "MIT"}
@@ -50,9 +50,9 @@ dev = [
 actig-lambda-deployer = "actig_lambda_deployer.cli:cli"
 
 [project.urls]
-Homepage = "https://github.com/ACTIG/actig-lambda-deployer"
-Repository = "https://github.com/ACTIG/actig-lambda-deployer"
-Issues = "https://github.com/ACTIG/actig-lambda-deployer/issues"
+Homepage = "https://github.com/gao-dennis/actig-lambda-deployer"
+Repository = "https://github.com/gao-dennis/actig-lambda-deployer"
+Issues = "https://github.com/gao-dennis/actig-lambda-deployer/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]

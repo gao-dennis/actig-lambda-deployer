@@ -64,7 +64,7 @@ actig-lambda-deployer status my-function
 Configure AWS credentials using any standard method:
 
 ```bash
-# Using AWS CLI
+# Using AWS CLI (Preferred Method)
 aws configure
 
 # Using environment variables

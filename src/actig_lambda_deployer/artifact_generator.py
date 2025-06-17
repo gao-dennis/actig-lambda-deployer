@@ -116,10 +116,10 @@ The team uses this pattern:
 
 <current_variables>
 Use these environment variables:
-- $AWS_DEFAULT_REGION for region
-- $AWS_ACCOUNT_ID for account ID  
+- $AWS_DEFAULT_REGION for region. Should default to us-east-1
+- $AWS_ACCOUNT_ID for account ID. Should default to 287440137692
 - $IMAGE_REPO_NAME for repository name
-- $IMAGE_TAG for image tag
+- $IMAGE_TAG for image tag. Should default to latest
 </current_variables>
 
 <output_format>
