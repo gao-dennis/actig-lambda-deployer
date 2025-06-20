@@ -51,6 +51,8 @@ The tool will:
 4. Build and deploy your container image
 5. Deploy your Lambda function
 
+**🔄 Updates & Redeployments**: Running the command again on an existing function will automatically update it with your latest code changes. The tool reuses existing infrastructure (ECR repo, CodeCommit repo, CodeBuild project) and creates a new container image to update your Lambda function with zero downtime.
+
 ### 3. Check Deployment Status
 
 ```bash
@@ -103,6 +105,12 @@ actig-lambda-deployer deploy ./src --function-name api-handler --dry-run
 ### Different AWS Region
 ```bash
 actig-lambda-deployer deploy ./src --function-name api-handler --region us-west-2
+```
+
+### Update Existing Function
+```bash
+# Same command updates the existing Lambda function
+actig-lambda-deployer deploy ./src --function-name api-handler
 ```
 
 ### Debug Mode

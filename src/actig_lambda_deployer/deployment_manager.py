@@ -1,6 +1,7 @@
 # Updated deployment_manager.py with CodeCommit integration
 
 import json
+import logging
 import time
 import tempfile
 import shutil
@@ -20,6 +21,7 @@ class DeploymentManager:
         self.ecr = client_manager.get_client('ecr')
         self.cloudformation = client_manager.get_client('cloudformation')
         self.lambda_client = client_manager.get_client('lambda')
+        self.logger = logging.getLogger(__name__)
     
     def deploy(self, function_name: str, repository_name: str, 
                source_path: Path, artifacts: Dict[str, str]) -> Dict[str, Any]:
@@ -28,46 +30,63 @@ class DeploymentManager:
         deployment_result = {}
         
         try:
+            self.logger.info(f"🚀 Starting deployment workflow for function: {function_name}")
+            
             # Step 1: Create ECR repository
+            self.logger.info("📦 Creating ECR repository for container images")
             repo_uri = self._create_ecr_repository(repository_name)
             deployment_result['repository_uri'] = repo_uri
+            self.logger.info(f"✅ ECR repository ready: {repo_uri}")
             
             # Step 2: Write artifacts to source directory
+            self.logger.info("📄 Writing generated artifacts to source directory")
             self._write_artifacts(source_path, artifacts)
+            self.logger.info(f"✅ Artifacts written to {source_path}")
             
             # Step 3: Create CodeCommit repository and push code
+            self.logger.info("🏗️ Setting up CodeCommit repository and uploading source code")
             codecommit_url = self._setup_codecommit_repository(
                 f"{function_name}-source", 
                 source_path
             )
             deployment_result['codecommit_url'] = codecommit_url
+            self.logger.info(f"✅ Source code uploaded to CodeCommit: {codecommit_url}")
             
             # Step 4: Create/update CodeBuild project
+            self.logger.info("🔨 Setting up CodeBuild project for container image building")
             build_project = self._create_codebuild_project(
                 function_name, 
                 repository_name, 
                 codecommit_url
             )
             deployment_result['build_project'] = build_project
+            self.logger.info(f"✅ CodeBuild project configured: {build_project}")
             
             # Step 5: Trigger build
+            self.logger.info("▶️ Starting CodeBuild container image build")
             build_result = self._trigger_build(build_project)
             deployment_result['build_id'] = build_result['build']['id']
+            self.logger.info(f"🔄 Build started with ID: {build_result['build']['id']}")
             
             # Step 6: Wait for build completion
+            self.logger.info("⏳ Waiting for container build to complete...")
             image_uri = self._wait_for_build(build_result['build']['id'], repo_uri)
             deployment_result['image_uri'] = image_uri
+            self.logger.info(f"✅ Container image built and pushed: {image_uri}")
             
             # Step 7: Deploy CloudFormation stack
+            self.logger.info("☁️ Deploying Lambda function via CloudFormation")
             stack_result = self._deploy_cloudformation_stack(
                 function_name, image_uri, artifacts['cloudformation.yaml']
             )
             deployment_result['stack_name'] = stack_result['StackId']
+            self.logger.info(f"✅ CloudFormation stack deployed: {stack_result['StackId']}")
             
             # Step 8: Get function ARN
             function_arn = self._get_function_arn(function_name)
             deployment_result['function_arn'] = function_arn
             
+            self.logger.info(f"🎉 Deployment completed successfully! Function ARN: {function_arn}")
             return deployment_result
             
         except Exception as e:
@@ -78,6 +97,7 @@ class DeploymentManager:
     def _create_codecommit_repository(self, repo_name: str) -> str:
         """Create CodeCommit repository if it doesn't exist"""
         try:
+            self.logger.debug(f"Creating CodeCommit repository: {repo_name}")
             response = self.codecommit.create_repository(
                 repositoryName=repo_name,
                 repositoryDescription=f"Lambda deployment repository: {repo_name}",
@@ -87,6 +107,8 @@ class DeploymentManager:
                 }
             )
             
+            self.logger.info(f"📋 CodeCommit repository created: {repo_name}")
+            
             # Set repository triggers for CodeBuild
             self._setup_codecommit_triggers(repo_name)
             
@@ -94,6 +116,7 @@ class DeploymentManager:
             return f"codecommit::{self.client_manager.region_name}://{repo_name}"
             
         except self.codecommit.exceptions.RepositoryNameExistsException:
+            self.logger.info(f"📋 Using existing CodeCommit repository: {repo_name}")
             # Repository already exists, return git-remote-codecommit URL
             return f"codecommit::{self.client_manager.region_name}://{repo_name}"
     
@@ -108,19 +131,25 @@ class DeploymentManager:
             temp_repo_path = Path(temp_dir) / repo_name
             region = self.client_manager.region_name
             
+            self.logger.debug("Configuring Git credentials for CodeCommit access")
             # Configure git credentials for CodeCommit
             self._configure_git_credentials()
             
             try:
                 # Try to clone the repository first
                 try:
+                    self.logger.debug(f"Attempting to clone repository from {clone_url}")
                     repo = Repo.clone_from(clone_url, temp_repo_path, allow_unsafe_protocols=True)
+                    self.logger.debug("Successfully cloned existing repository")
                 except Exception:
                     # Repository is empty or doesn't exist, initialize new repository
+                    self.logger.debug("Repository is empty, initializing new repository")
                     repo = Repo.init(temp_repo_path)
                     repo.create_remote('origin', clone_url)
                 
                 # Copy source files to repository
+                self.logger.info(f"📂 Copying source files from {source_path} to repository")
+                file_count = 0
                 for item in source_path.iterdir():
                     if item.name == '.git':
                         continue
@@ -128,23 +157,36 @@ class DeploymentManager:
                     dest = temp_repo_path / item.name
                     if item.is_dir():
                         shutil.copytree(item, dest, dirs_exist_ok=True)
+                        file_count += sum(1 for _ in dest.rglob('*') if _.is_file())
                     else:
                         shutil.copy2(item, dest)
+                        file_count += 1
+                
+                self.logger.info(f"📁 Copied {file_count} files to repository")
                 
                 # Add and commit files
+                commit_message = f'Deploy {repo_name} - {time.strftime("%Y%m%d-%H%M%S")}'
+                self.logger.debug(f"Staging files and creating commit: {commit_message}")
                 repo.index.add('*')
-                repo.index.commit(f'Deploy {repo_name} - {time.strftime("%Y%m%d-%H%M%S")}')
+                repo.index.commit(commit_message)
                 
                 # Push to CodeCommit
                 origin = repo.remote('origin')
+                self.logger.info("⬆️ Pushing files to CodeCommit repository")
                 try:
                     # Try to push to main branch first
                     origin.push('HEAD:main', allow_unsafe_protocols=True)
+                    self.logger.debug("Successfully pushed to main branch")
                 except Exception:
                     # If that fails, try pushing as the default branch
+                    self.logger.debug("Failed to push to main, trying default branch")
                     origin.push('HEAD', allow_unsafe_protocols=True)
+                    self.logger.debug("Successfully pushed to default branch")
+                
+                self.logger.info(f"✅ All files uploaded to CodeCommit repository: {repo_name}")
                 
             except Exception as e:
+                self.logger.error(f"Failed to upload files to CodeCommit: {e}")
                 raise DeploymentError(f"Failed to push to CodeCommit: {e}")
         
         return clone_url
@@ -392,11 +434,17 @@ class DeploymentManager:
                 "Please provide a requirements.txt file in your Lambda source directory."
             )
         
+        self.logger.debug(f"Writing {len(artifacts)} artifacts to {source_path}")
+        
         # Write generated artifacts (excludes requirements.txt)
         for filename, content in artifacts.items():
             file_path = source_path / filename
+            self.logger.debug(f"Writing artifact: {filename} ({len(content)} characters)")
             with open(file_path, 'w') as f:
                 f.write(content)
+            self.logger.debug(f"✅ Written: {file_path}")
+        
+        self.logger.info(f"📝 All deployment artifacts written to {source_path}")
     
     def _create_ecr_repository(self, repository_name: str) -> str:
         """Create ECR repository if it doesn't exist"""
@@ -437,7 +485,12 @@ class DeploymentManager:
     
     def _trigger_build(self, project_name: str) -> Dict[str, Any]:
         """Start CodeBuild execution"""
+        self.logger.info(f"🚀 Triggering CodeBuild project: {project_name}")
         response = self.codebuild.start_build(projectName=project_name)
+        build_id = response['build']['id']
+        self.logger.info(f"✅ CodeBuild started successfully")
+        self.logger.debug(f"Build ID: {build_id}")
+        self.logger.debug(f"Build ARN: {response['build']['arn']}")
         return response
     
     def _wait_for_build(self, build_id: str, repo_uri: str) -> str:
@@ -445,6 +498,9 @@ class DeploymentManager:
         max_wait_time = 1800  # 30 minutes
         wait_interval = 30
         elapsed_time = 0
+        last_phase = None
+        
+        self.logger.info(f"⏳ Monitoring build progress for build: {build_id}")
         
         while elapsed_time < max_wait_time:
             response = self.codebuild.batch_get_builds(ids=[build_id])
@@ -453,15 +509,47 @@ class DeploymentManager:
             phase = build['currentPhase']
             status = build['buildStatus']
             
+            # Log phase changes
+            if phase != last_phase:
+                self.logger.info(f"🔄 Build phase: {phase}")
+                last_phase = phase
+            
+            # Log detailed progress for key phases
+            if phase == 'PRE_BUILD':
+                self.logger.debug("Pre-build phase: Setting up environment and ECR authentication")
+            elif phase == 'BUILD':
+                self.logger.debug("Build phase: Building Docker image")
+            elif phase == 'POST_BUILD':
+                self.logger.debug("Post-build phase: Tagging and pushing image to ECR")
+            
             if status == 'SUCCEEDED':
                 # Build successful, return image URI
+                elapsed_minutes = elapsed_time // 60
+                elapsed_seconds = elapsed_time % 60
+                self.logger.info(f"🎉 Build completed successfully in {elapsed_minutes}m {elapsed_seconds}s")
+                self.logger.info(f"📦 Container image available at: {repo_uri}:latest")
                 return f"{repo_uri}:latest"
             elif status in ['FAILED', 'FAULT', 'STOPPED', 'TIMED_OUT']:
+                self.logger.error(f"❌ Build failed with status: {status}")
+                # Try to get build logs for debugging
+                try:
+                    if 'logs' in build and 'cloudWatchLogs' in build['logs']:
+                        log_group = build['logs']['cloudWatchLogs']['groupName']
+                        log_stream = build['logs']['cloudWatchLogs']['streamName']
+                        self.logger.error(f"Build logs available at CloudWatch: {log_group}/{log_stream}")
+                except Exception:
+                    pass
                 raise DeploymentError(f"Build failed with status: {status}")
+            
+            # Log progress every 2 minutes during long builds
+            if elapsed_time > 0 and elapsed_time % 120 == 0:
+                minutes_elapsed = elapsed_time // 60
+                self.logger.info(f"⏱️ Build still in progress... ({minutes_elapsed} minutes elapsed)")
             
             time.sleep(wait_interval)
             elapsed_time += wait_interval
         
+        self.logger.error(f"❌ Build timed out after {max_wait_time // 60} minutes")
         raise DeploymentError("Build timed out")
     
     def _deploy_cloudformation_stack(self, function_name: str, 

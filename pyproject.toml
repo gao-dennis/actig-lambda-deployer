@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "actig-lambda-deployer"
-version = "0.1.1"
+version = "0.1.2"
 description = "AWS Lambda Container Deployment CLI with AI-powered code analysis"
 readme = "README.md"
 license = {text = "MIT"}

@@ -1,4 +1,5 @@
 import json
+import logging
 from typing import Dict, Any
 from .utils.exceptions import ArtifactGenerationError
 
@@ -8,21 +9,30 @@ class ArtifactGenerator:
     def __init__(self, client_manager):
         self.client_manager = client_manager
         self.bedrock_client = client_manager.get_client('bedrock-runtime')
+        self.logger = logging.getLogger(__name__)
     
     def generate_artifacts(self, analysis_result: Dict[str, Any]) -> Dict[str, str]:
         """Generate deployment artifacts (excludes requirements.txt - user provided)"""
         try:
+            self.logger.info("Starting artifact generation process")
             artifacts = {}
             
             # Generate Dockerfile
+            self.logger.info("Generating Dockerfile using AI analysis")
             artifacts['Dockerfile'] = self._generate_dockerfile(analysis_result)
+            self.logger.info("✅ Dockerfile generated successfully")
             
             # Generate buildspec.yml
+            self.logger.info("Generating buildspec.yml for CodeBuild")
             artifacts['buildspec.yml'] = self._generate_buildspec(analysis_result)
+            self.logger.info("✅ buildspec.yml generated successfully")
             
             # Generate CloudFormation template
+            self.logger.info("Generating CloudFormation template for Lambda deployment")
             artifacts['cloudformation.yaml'] = self._generate_cloudformation(analysis_result)
+            self.logger.info("✅ CloudFormation template generated successfully")
             
+            self.logger.info(f"All {len(artifacts)} deployment artifacts generated successfully")
             return artifacts
             
         except Exception as e:
@@ -33,6 +43,7 @@ class ArtifactGenerator:
         
         ai_analysis = analysis.get('ai_analysis', {})
         base_image = ai_analysis.get('base_image_recommendation', 'public.ecr.aws/lambda/python:3.12')
+        self.logger.debug(f"Using base image: {base_image}")
         
         prompt = f"""
 <task>

@@ -56,7 +56,7 @@ def deploy(ctx, source_path, function_name, repository_name, dry_run):
         # Check for required files
         requirements_path = source_path / 'requirements.txt'
         if not requirements_path.exists():
-            click.echo(f"❌ Error: requirements.txt not found in {source_path}")
+            click.echo(f"Error: requirements.txt not found in {source_path}")
             click.echo("Please provide a requirements.txt file in your Lambda source directory.")
             ctx.exit(1)
         
@@ -90,11 +90,11 @@ def deploy(ctx, source_path, function_name, repository_name, dry_run):
         
     except DeploymentError as e:
         logger.error(f"Deployment failed: {e}")
-        click.echo(f"❌ Deployment failed: {e}", err=True)
+        click.echo(f"Deployment failed: {e}", err=True)
         raise click.Abort()
     except Exception as e:
         logger.exception("Unexpected error during deployment")
-        click.echo(f"❌ Unexpected error: {e}", err=True)
+        click.echo(f"Unexpected error: {e}", err=True)
         raise click.Abort()
 
 @cli.command()
@@ -119,9 +119,9 @@ def status(ctx, function_name):
             click.echo(f"Image URI: {function_config['Code']['ImageUri']}")
             
     except client_manager.get_client('lambda').exceptions.ResourceNotFoundException:
-        click.echo(f"❌ Function {function_name} not found")
+        click.echo(f"Function {function_name} not found")
     except Exception as e:
-        click.echo(f"❌ Error checking status: {e}")
+        click.echo(f"Error checking status: {e}")
 
 if __name__ == '__main__':
     cli()
